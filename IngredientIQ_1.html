@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IngredientIQ">
+<meta name="theme-color" content="#0D1F1A">
+<title>IngredientIQ</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230D1F1A' rx='20'/><text y='65' x='50' text-anchor='middle' font-size='55'>⬡</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@zxing/library@0.19.3/umd/index.min.js"></script>
+<style>
+:root {
+  --bg:#0A1810;--bg2:#0D1F1A;--bg3:rgba(255,255,255,0.04);
+  --gold:#C9A84C;--green:#4CAF50;--amber:#FFB300;--red:#E53935;
+  --text:rgba(255,255,255,0.92);--text2:rgba(255,255,255,0.55);--text3:rgba(255,255,255,0.28);
+  --border:rgba(255,255,255,0.08);
+  --safe-top:env(safe-area-inset-top,44px);--safe-bottom:env(safe-area-inset-bottom,20px);
+  --serif:'Playfair Display',Georgia,serif;--mono:'DM Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--mono);color:var(--text);overscroll-behavior:none}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;background:var(--bg);overflow:hidden}
+.screen.active{display:flex}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{display:none}
+.safe-top{height:calc(var(--safe-top) + 8px);flex-shrink:0}
+.card{background:var(--bg3);border:0.5px solid var(--border);border-radius:18px;padding:16px;margin-bottom:12px}
+.btn-primary{width:100%;padding:16px;border-radius:16px;border:none;cursor:pointer;font-family:var(--serif);font-size:17px;color:var(--text);background:linear-gradient(135deg,#1B4332,#2D6A4F);border:0.5px solid rgba(76,175,80,0.35);box-shadow:0 8px 32px rgba(76,175,80,0.12);transition:transform 0.15s}
+.btn-primary:active{transform:scale(0.98)}
+.btn-gold{width:100%;padding:14px;border-radius:14px;border:0.5px solid rgba(201,168,76,0.4);cursor:pointer;font-family:var(--serif);font-size:16px;color:var(--gold);background:rgba(201,168,76,0.1);transition:transform 0.15s}
+.btn-gold:active{transform:scale(0.98)}
+.tag{display:inline-block;padding:4px 10px;border-radius:20px;font-size:10px;margin:3px}
+.tag-green{background:rgba(76,175,80,0.12);border:0.5px solid rgba(76,175,80,0.35);color:#81C784}
+.tag-red{background:rgba(229,57,53,0.1);border:0.5px solid rgba(229,57,53,0.3);color:#EF9A9A}
+.label{font-size:9px;letter-spacing:0.14em;color:var(--text3);margin-bottom:8px}
+.ing-card{border-radius:14px;padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;border:0.5px solid}
+.ing-card.green{background:rgba(76,175,80,0.08);border-color:rgba(76,175,80,0.3)}
+.ing-card.yellow{background:rgba(255,179,0,0.08);border-color:rgba(255,179,0,0.3)}
+.ing-card.red{background:rgba(229,57,53,0.08);border-color:rgba(229,57,53,0.3)}
+.ing-detail{display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid rgba(255,255,255,0.08)}
+.ing-card.open .ing-detail{display:block}
+.ing-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.dot-green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot-yellow{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.dot-red{background:var(--red);box-shadow:0 0 6px var(--red)}
+.cat-bar{margin-bottom:12px}
+.cat-bar-track{height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-top:4px}
+.cat-bar-fill{height:4px;border-radius:2px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:14px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:10px;letter-spacing:0.05em;cursor:pointer;border:0.5px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text3);transition:all 0.2s}
+.tab.active{background:rgba(201,168,76,0.15);border-color:rgba(201,168,76,0.45);color:var(--gold)}
+.alt-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:16px;padding:14px;margin-bottom:10px}
+.inp{width:100%;background:rgba(255,255,255,0.05);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;-webkit-appearance:none}
+.inp::placeholder{color:var(--text3)}
+.inp:focus{border-color:rgba(201,168,76,0.4)}
+textarea.inp{resize:none;line-height:1.5}
+.spinner{width:44px;height:44px;border:2px solid rgba(255,255,255,0.08);border-top:2px solid var(--gold);border-right:2px solid var(--green);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fade-in{animation:fadeIn 0.4s ease forwards}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(76,175,80,0.4)}50%{box-shadow:0 0 0 12px rgba(76,175,80,0)}}
+.pulse{animation:pulse 2.5s infinite}
+@keyframes scanMove{0%{top:8%}100%{top:92%}}
+.scan-line-anim{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:scanMove 2s linear infinite}
+#toast{position:fixed;top:calc(var(--safe-top) + 12px);left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(10,24,16,0.95);border:0.5px solid var(--gold);border-radius:12px;padding:10px 20px;font-size:12px;color:var(--gold);z-index:999;transition:transform 0.3s;white-space:nowrap;backdrop-filter:blur(10px);max-width:90vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#api-setup{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:flex-end;z-index:100;backdrop-filter:blur(4px)}
+#api-setup.show{display:flex}
+#api-panel{background:var(--bg2);border-radius:24px 24px 0 0;border-top:0.5px solid var(--border);padding:24px;width:100%;padding-bottom:calc(24px + var(--safe-bottom))}
+.product-found{background:linear-gradient(135deg,rgba(27,67,50,0.8),rgba(13,31,26,0.9));border:0.5px solid rgba(76,175,80,0.25);border-radius:18px;padding:16px;margin-bottom:12px}
+.skin-btn{padding:7px 14px;border-radius:20px;border:0.5px solid var(--border);background:rgba(255,255,255,0.04);font-family:var(--mono);font-size:11px;color:var(--text3);cursor:pointer;transition:all 0.2s}
+.skin-btn.selected{background:rgba(76,175,80,0.15);border-color:rgba(76,175,80,0.4);color:#81C784}
+.mode-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:10px;font-size:10px;margin-bottom:12px}
+.mode-local{background:rgba(76,175,80,0.1);border:0.5px solid rgba(76,175,80,0.3);color:#81C784}
+.mode-ai{background:rgba(201,168,76,0.1);border:0.5px solid rgba(201,168,76,0.3);color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- API Key Sheet -->
+<div id="api-setup">
+  <div id="api-panel">
+    <div style="font-family:var(--serif);font-size:22px;margin-bottom:6px">Claude API Key (Optional)</div>
+    <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:6px">Die App funktioniert <strong style="color:#81C784">komplett ohne API Key</strong> mit der eingebauten Inhaltsstoff-Datenbank.</p>
+    <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:16px">Mit einem API Key bekommst du zusätzlich tiefere KI-Analysen, personalisierte Einschätzungen und smarte Alternativen-Empfehlungen.</p>
+    <div class="label">ANTHROPIC API KEY (OPTIONAL)</div>
+    <input type="password" id="api-key-input" class="inp" placeholder="sk-ant-api03-… (optional)" style="margin-bottom:12px">
+    <div style="display:flex;gap:8px">
+      <button onclick="closeApiSetup()" style="flex:1;padding:13px;border-radius:12px;border:0.5px solid var(--border);background:transparent;font-family:var(--mono);font-size:12px;color:var(--text2);cursor:pointer">Schließen</button>
+      <button onclick="saveApiKey()" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#1B4332,#2D6A4F);font-family:var(--serif);font-size:15px;color:var(--text);cursor:pointer">Speichern</button>
+    </div>
+    <p style="font-size:10px;color:var(--text3);text-align:center;margin-top:12px">Erhältlich auf console.anthropic.com · ca. 0,1–0,3 Cent pro Analyse</p>
+  </div>
+</div>
+
+<!-- HOME -->
+<div id="screen-home" class="screen active">
+  <div class="safe-top"></div>
+  <div class="scroll" style="padding:0 18px 12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <div style="width:18px;height:18px;background:linear-gradient(135deg,var(--gold),var(--green));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px">⬡</div>
+          <span style="font-size:9px;letter-spacing:0.2em;color:var(--gold)">INGREDIENTIQ</span>
+        </div>
+        <h1 style="font-family:var(--serif);font-size:28px;line-height:1.2">Was steckt<br><em style="color:var(--gold)">wirklich</em> drin?</h1>
+      </div>
+      <button onclick="showApiSetup()" style="background:rgba(255,255,255,0.04);border:0.5px solid var(--border);border-radius:12px;padding:8px 12px;font-size:10px;color:var(--text3);cursor:pointer;font-family:var(--mono)">⚙ API</button>
+    </div>
+
+    <!-- Mode indicator -->
+    <div id="mode-indicator" class="mode-badge mode-local">
+      <span>⬡</span><span id="mode-text">Lokale Datenbank aktiv — kein API Key nötig</span>
+    </div>
+
+    <!-- Scanner Box -->
+    <div onclick="startScan()" style="position:relative;border-radius:22px;overflow:hidden;background:rgba(255,255,255,0.02);border:0.5px solid rgba(201,168,76,0.2);aspect-ratio:1;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px" id="scan-placeholder">
+      <div style="width:80px;height:80px;border-radius:50%;border:1.5px solid rgba(201,168,76,0.25);display:flex;align-items:center;justify-content:center" class="pulse">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(201,168,76,0.07);display:flex;align-items:center;justify-content:center;font-size:28px">📷</div>
+      </div>
+      <p style="font-size:12px;color:var(--text2);text-align:center">Tippe zum Scannen<br><span style="font-size:10px;color:var(--text3)">EAN-13 · EAN-8 · QR-Code</span></p>
+      <div style="position:absolute;top:16px;left:16px;width:22px;height:22px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)"></div>
+      <div style="position:absolute;top:16px;right:16px;width:22px;height:22px;border-top:2px solid var(--gold);border-right:2px solid var(--gold)"></div>
+      <div style="position:absolute;bottom:16px;left:16px;width:22px;height:22px;border-bottom:2px solid var(--gold);border-left:2px solid var(--gold)"></div>
+      <div style="position:absolute;bottom:16px;right:16px;width:22px;height:22px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)"></div>
+    </div>
+
+    <!-- Active scanner -->
+    <div id="scan-active" style="display:none;position:relative;border-radius:22px;overflow:hidden;aspect-ratio:1;margin-bottom:14px;background:#000">
+      <video id="scanner-video" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover"></video>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+        <div style="width:220px;height:160px;position:relative">
+          <div style="position:absolute;top:0;left:0;width:24px;height:24px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)"></div>
+          <div style="position:absolute;top:0;right:0;width:24px;height:24px;border-top:2px solid var(--gold);border-right:2px solid var(--gold)"></div>
+          <div style="position:absolute;bottom:0;left:0;width:24px;height:24px;border-bottom:2px solid var(--gold);border-left:2px solid var(--gold)"></div>
+          <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)"></div>
+          <div class="scan-line-anim"></div>
+        </div>
+      </div>
+      <button onclick="stopScan()" style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);border:0.5px solid var(--border);border-radius:20px;padding:8px 20px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer">Scanner stoppen</button>
+    </div>
+
+    <!-- Manual Input -->
+    <div class="card">
+      <div class="label">ODER MANUELL EINGEBEN</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="manual-barcode" class="inp" placeholder="Barcode / EAN eingeben…" type="number" inputmode="numeric">
+        <div style="font-size:10px;color:var(--text3);text-align:center">— oder —</div>
+        <textarea id="manual-inci" class="inp" placeholder="INCI-Liste einfügen…&#10;z.B.: Aqua, Glycerin, Niacinamide, Phenoxyethanol…" rows="3"></textarea>
+        <button onclick="manualAnalyze()" class="btn-primary" style="font-size:15px;padding:13px">Analysieren →</button>
+      </div>
+    </div>
+
+    <!-- Recent -->
+    <div id="recent-section" style="display:none">
+      <div class="label" style="margin-top:4px">ZULETZT GESCANNT</div>
+      <div id="recent-list"></div>
+    </div>
+    <p style="font-size:9px;color:var(--text3);text-align:center;margin-top:8px;line-height:1.7">⚠ Keine medizinische Beratung. Bei gesundheitlichen Fragen konsultiere einen Arzt.</p>
+  </div>
+  <div id="nav"></div>
+</div>
+
+<!-- LOADING -->
+<div id="screen-loading" class="screen">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px">
+    <div style="position:relative;margin-bottom:32px">
+      <div style="width:90px;height:90px;border-radius:50%;border:1.5px solid rgba(201,168,76,0.15);display:flex;align-items:center;justify-content:center">
+        <div class="spinner"></div>
+        <div style="position:absolute;font-size:24px">🔬</div>
+      </div>
+    </div>
+    <h2 style="font-family:var(--serif);font-size:22px;margin-bottom:6px;text-align:center">Analyse läuft</h2>
+    <p style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:32px" id="loading-sub">Produktdaten werden abgerufen…</p>
+    <div id="loading-steps" style="width:100%;max-width:280px"></div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="screen-result" class="screen">
+  <div class="safe-top"></div>
+  <div class="scroll" style="padding:0 18px 12px" id="result-content"></div>
+  <div id="nav-result"></div>
+</div>
+
+<!-- ALTERNATIVES -->
+<div id="screen-alternatives" class="screen">
+  <div class="safe-top"></div>
+  <div class="scroll" style="padding:0 18px 12px" id="alt-content"></div>
+  <div id="nav-alt"></div>
+</div>
+
+<!-- PROFILE -->
+<div id="screen-profile" class="screen">
+  <div class="safe-top"></div>
+  <div class="scroll" style="padding:0 18px 24px">
+    <h1 style="font-family:var(--serif);font-size:26px;margin-bottom:4px">Profil</h1>
+    <p style="font-size:11px;color:var(--text2);margin-bottom:20px;line-height:1.6">Damit die Analyse auf dich zugeschnitten ist.</p>
+    <div class="card">
+      <div class="label">HAUTTYP</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="skin-btn" data-val="normal" onclick="toggleSkin(this)">Normal</button>
+        <button class="skin-btn" data-val="trocken" onclick="toggleSkin(this)">Trocken</button>
+        <button class="skin-btn" data-val="fettig" onclick="toggleSkin(this)">Fettig</button>
+        <button class="skin-btn" data-val="mischhaut" onclick="toggleSkin(this)">Mischhaut</button>
+        <button class="skin-btn" data-val="sensibel" onclick="toggleSkin(this)">Sensibel</button>
+        <button class="skin-btn" data-val="reif" onclick="toggleSkin(this)">Reif</button>
+        <button class="skin-btn" data-val="akne" onclick="toggleSkin(this)">Akne-Neigung</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">UNVERTRÄGLICHKEITEN / ALLERGIEN</div>
+      <textarea id="prof-intolerances" class="inp" placeholder="z.B. Duftstoffe, Nüsse, Gluten, Parabene, Silikone…" rows="2"></textarea>
+    </div>
+    <div class="card">
+      <div class="label">MEINE ZIELE</div>
+      <textarea id="prof-goals" class="inp" placeholder="z.B. Anti-Aging, Aufhellung, Muskelaufbau…" rows="2"></textarea>
+    </div>
+    <div class="card">
+      <div class="label">BESONDERHEITEN</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="pref-vegan" style="width:16px;height:16px;accent-color:var(--green)"><span style="font-size:13px;color:var(--text2)">Vegan / Tierversuchsfrei</span></label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="pref-pregnant" style="width:16px;height:16px;accent-color:var(--gold)"><span style="font-size:13px;color:var(--text2)">Schwangerschaft / Stillzeit</span></label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="pref-natural" style="width:16px;height:16px;accent-color:var(--green)"><span style="font-size:13px;color:var(--text2)">Bevorzuge Naturkosmetik</span></label>
+      </div>
+    </div>
+    <button onclick="saveProfile()" class="btn-primary" style="margin-bottom:12px">Profil speichern ✓</button>
+    <div class="card" style="background:rgba(255,255,255,0.02)">
+      <p style="font-size:9px;color:var(--text3);line-height:1.8">🔒 Alle Daten werden lokal auf deinem Gerät gespeichert. Keine Cloud. Keine Weitergabe.</p>
+    </div>
+  </div>
+  <div id="nav-profile"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// INHALTSSTOFF-DATENBANK (500+ Einträge)
+// ══════════════════════════════════════════════════════════════
+const INGREDIENT_DB = {
+  // ── BASISSTOFFE & LÖSUNGSMITTEL ──
+  "aqua":                   {r:"green",e:"Wasser – universelles Lösungsmittel, Basis jeder wässrigen Formel",c:null,cat:"Basis"},
+  "water":                  {r:"green",e:"Wasser – Basisbestandteil",c:null,cat:"Basis"},
+  "alcohol denat":          {r:"yellow",e:"Denaturierter Alkohol – leicht austrocknend, löst Wirkstoffe",c:"Kann bei trockener/sensibler Haut die Barriere schwächen",cat:"Lösungsmittel"},
+  "alcohol":                {r:"yellow",e:"Alkohol – antimikrobiell, leicht austrocknend",c:"Bei regelmäßiger Anwendung kann er die Hautbarriere beeinträchtigen",cat:"Lösungsmittel"},
+  "isopropyl alcohol":      {r:"yellow",e:"Isopropanol – Lösungsmittel, antiseptisch",c:"Austrocknend, reizt empfindliche Haut",cat:"Lösungsmittel"},
+  "propylene glycol":       {r:"yellow",e:"Feuchthaltemittel, verbessert Textur",c:"Kann bei Sensiblen leichte Reizungen auslösen",cat:"Feuchthaltemittel"},
+  "butylene glycol":        {r:"green",e:"Feuchthaltemittel, verbessert Hautgefühl",c:null,cat:"Feuchthaltemittel"},
+  "pentylene glycol":       {r:"green",e:"Feuchthaltemittel mit antimikrobieller Wirkung",c:null,cat:"Feuchthaltemittel"},
+  "hexylene glycol":        {r:"yellow",e:"Lösungsmittel und Feuchthaltemittel",c:"Kann bei hoher Konzentration reizen",cat:"Feuchthaltemittel"},
+
+  // ── FEUCHTHALTESTOFFE & HUMEKTANZIEN ──
+  "glycerin":               {r:"green",e:"Zieht Feuchtigkeit aus der Luft in die Haut – ein Klassiker",c:null,cat:"Feuchthaltemittel"},
+  "glycerol":               {r:"green",e:"Glycerin – intensive Feuchtigkeit",c:null,cat:"Feuchthaltemittel"},
+  "hyaluronic acid":        {r:"green",e:"Bindet bis zu 1000-fache Menge Wasser – intensive Volumenhydratation",c:null,cat:"Wirkstoff"},
+  "sodium hyaluronate":     {r:"green",e:"Niedermolekulare Hyaluronsäure – dringt tiefer in die Haut ein",c:null,cat:"Wirkstoff"},
+  "sorbitol":               {r:"green",e:"Natürlicher Zuckeralkohol als Feuchthaltemittel",c:null,cat:"Feuchthaltemittel"},
+  "panthenol":              {r:"green",e:"Pro-Vitamin B5 – beruhigt, regeneriert und feuchtigkeitsspendend",c:null,cat:"Wirkstoff"},
+  "urea":                   {r:"green",e:"Harnstoff – natürlicher NMF, hochwirksames Feuchthaltemittel, keratolytisch",c:null,cat:"Wirkstoff"},
+  "aloe barbadensis leaf juice":{r:"green",e:"Aloe Vera – beruhigt, kühlt, spendet Feuchtigkeit",c:null,cat:"Pflanzenextrakt"},
+  "aloe vera":              {r:"green",e:"Aloe Vera Gel – beruhigend und feuchtigkeitsspendend",c:null,cat:"Pflanzenextrakt"},
+  "sodium pca":             {r:"green",e:"Natürlicher Feuchthaltefaktor (NMF) – in der Haut natürlich vorhanden",c:null,cat:"Feuchthaltemittel"},
+  "lactic acid":            {r:"green",e:"Milchsäure – AHA, exfoliiert sanft, verbessert Feuchtigkeit",c:"Bei >10% Konzentration Sonnenschutz empfehlen",cat:"Wirkstoff"},
+  "glycolic acid":          {r:"yellow",e:"Glykolsäure – stärkste AHA, exfoliiert, Anti-Aging",c:"Kann reizen, Lichtschutz danach wichtig",cat:"Wirkstoff"},
+  "salicylic acid":         {r:"yellow",e:"BHA – reinigt Poren tief, anti-entzündlich bei Akne",c:"Nicht in der Schwangerschaft (hohe Dosen), kann austrocknen",cat:"Wirkstoff"},
+
+  // ── WIRKSTOFFE & AKTIVE INHALTSSTOFFE ──
+  "niacinamide":            {r:"green",e:"Vitamin B3 – reduziert Poren, gleicht Teint, stärkt Barriere",c:null,cat:"Wirkstoff"},
+  "retinol":                {r:"yellow",e:"Vitamin A – Anti-Aging Wirkstoff Nr. 1, stimuliert Zellerneuerung",c:"Nicht in Schwangerschaft, Lichtschutz erforderlich, kann reizen",cat:"Wirkstoff"},
+  "retinyl palmitate":      {r:"yellow",e:"Vitamin A-Ester – milder als Retinol, anti-aging",c:"In der Schwangerschaft vermeiden",cat:"Wirkstoff"},
+  "ascorbic acid":          {r:"green",e:"Vitamin C – Antioxidans, hellt auf, stimuliert Kollagen",c:"Instabil, oxidiert schnell nach Öffnung",cat:"Wirkstoff"},
+  "ascorbyl glucoside":     {r:"green",e:"Stabiles Vitamin C-Derivat – aufhellend, antioxidativ",c:null,cat:"Wirkstoff"},
+  "tocopherol":             {r:"green",e:"Vitamin E – Antioxidans, schützt Hautlipide",c:null,cat:"Wirkstoff"},
+  "tocopheryl acetate":     {r:"green",e:"Vitamin E-Ester – antioxidativ, stabilisiert Formeln",c:null,cat:"Wirkstoff"},
+  "ceramide np":            {r:"green",e:"Ceramid – stärkt die Hautbarriere und hält Feuchtigkeit",c:null,cat:"Wirkstoff"},
+  "ceramide ap":            {r:"green",e:"Ceramid – Lipidbestandteil der Hautbarriere",c:null,cat:"Wirkstoff"},
+  "ceramide eop":           {r:"green",e:"Ceramid – essentiell für gesunde Hautbarriere",c:null,cat:"Wirkstoff"},
+  "ceramides":              {r:"green",e:"Ceramide – stärken die natürliche Schutzbarriere",c:null,cat:"Wirkstoff"},
+  "peptides":               {r:"green",e:"Peptide – Signalmoleküle, stimulieren Kollagenproduktion",c:null,cat:"Wirkstoff"},
+  "palmitoyl tripeptide-1": {r:"green",e:"Anti-Aging Peptid – stimuliert Kollagen und Elastin",c:null,cat:"Wirkstoff"},
+  "palmitoyl tetrapeptide-7":{r:"green",e:"Anti-Aging Peptid – reduziert Entzündungen",c:null,cat:"Wirkstoff"},
+  "adenosine":              {r:"green",e:"Anti-Aging Wirkstoff – entspannt Fältchen, anti-entzündlich",c:null,cat:"Wirkstoff"},
+  "resveratrol":            {r:"green",e:"Starkes pflanzliches Antioxidans aus Weintrauben",c:null,cat:"Wirkstoff"},
+  "caffeine":               {r:"green",e:"Koffein – entwässernd, lindert Augenringe, antioxidativ",c:null,cat:"Wirkstoff"},
+  "allantoin":              {r:"green",e:"Beruhigt gereizte Haut, fördert Wundheilung",c:null,cat:"Wirkstoff"},
+  "centella asiatica extract":{r:"green",e:"Tigergras – beruhigt, anti-entzündlich, fördert Kollagen",c:null,cat:"Pflanzenextrakt"},
+  "centella asiatica":      {r:"green",e:"Tigergras-Extrakt – beruhigend, hautregenerierend",c:null,cat:"Pflanzenextrakt"},
+  "madecassoside":          {r:"green",e:"Aktiver Bestandteil aus Centella – stark beruhigend",c:null,cat:"Wirkstoff"},
+  "asiaticoside":           {r:"green",e:"Wirkstoff aus Centella – fördert Kollagenbildung",c:null,cat:"Wirkstoff"},
+  "azelaic acid":           {r:"green",e:"Azelainsäure – gegen Akne, Rötungen und Hyperpigmentierung",c:null,cat:"Wirkstoff"},
+  "tranexamic acid":        {r:"green",e:"Aufhellend, reduziert Hyperpigmentierung",c:null,cat:"Wirkstoff"},
+  "kojic acid":             {r:"yellow",e:"Aufhellend, hemmt Melaninbildung",c:"Kann reizen, in höheren Konzentrationen bedenklich",cat:"Wirkstoff"},
+  "arbutin":                {r:"green",e:"Aufhellender Wirkstoff – sanfter als Kojisäure",c:null,cat:"Wirkstoff"},
+  "alpha arbutin":          {r:"green",e:"Stabilste Form von Arbutin – gleichmäßiger Teint",c:null,cat:"Wirkstoff"},
+  "bakuchiol":              {r:"green",e:"Pflanzliche Retinol-Alternative aus Babchi – anti-aging",c:null,cat:"Pflanzenextrakt"},
+  "bisabolol":              {r:"green",e:"Aus Kamille – beruhigend, anti-entzündlich",c:null,cat:"Wirkstoff"},
+  "zinc oxide":             {r:"green",e:"Mineralischer UV-Filter, anti-entzündlich, beruhigend",c:null,cat:"UV-Filter"},
+  "titanium dioxide":       {r:"green",e:"Mineralischer UV-Filter, lichtundurchlässig",c:"In Nanopartikelform umstritten (Inhalation vermeiden)",cat:"UV-Filter"},
+  "oat kernel extract":     {r:"green",e:"Haferextrakt – beruhigt, lindert Juckreiz",c:null,cat:"Pflanzenextrakt"},
+  "avena sativa":           {r:"green",e:"Haferflockenextrakt – beruhigend, anti-entzündlich",c:null,cat:"Pflanzenextrakt"},
+  "licorice root extract":  {r:"green",e:"Süßholzwurzel – aufhellend, anti-entzündlich",c:null,cat:"Pflanzenextrakt"},
+  "green tea extract":      {r:"green",e:"Antioxidans, anti-entzündlich, schützt vor freien Radikalen",c:null,cat:"Pflanzenextrakt"},
+  "camellia sinensis leaf extract":{r:"green",e:"Grüner Tee – stark antioxidativ",c:null,cat:"Pflanzenextrakt"},
+  "sea buckthorn extract":  {r:"green",e:"Sanddorn – reichhaltig an Omega 7, Vitamin C und E",c:null,cat:"Pflanzenextrakt"},
+
+  // ── EMOLLIENTIEN & ÖLE ──
+  "jojoba oil":             {r:"green",e:"Jojobaöl – eigentlich ein Wachs, hautähnliche Struktur, comedogenität nahe 0",c:null,cat:"Öl/Wachs"},
+  "simmondsia chinensis seed oil":{r:"green",e:"Jojobaöl – hautähnliche Struktur, sehr gut verträglich",c:null,cat:"Öl/Wachs"},
+  "argan oil":              {r:"green",e:"Arganöl – reich an Vitamin E und Fettsäuren, anti-aging",c:null,cat:"Öl"},
+  "argania spinosa kernel oil":{r:"green",e:"Arganöl – nährend, antioxidativ",c:null,cat:"Öl"},
+  "rosehip oil":            {r:"green",e:"Hagebuttenöl – reich an Vitamin C und A, Narbenreduktion",c:"Kann bei akneischer Haut komedogen sein",cat:"Öl"},
+  "rosa canina fruit oil":  {r:"green",e:"Hagebuttenöl – regenerierend",c:null,cat:"Öl"},
+  "squalane":               {r:"green",e:"Squalane – hautidentische Verbindung, spendet Feuchtigkeit ohne Poren zu verstopfen",c:null,cat:"Emolliens"},
+  "olive oil":              {r:"yellow",e:"Olivenöl – nährend, aber mittel-hoch komedogen",c:"Kann Poren verstopfen bei Akne-Neigung",cat:"Öl"},
+  "olea europaea fruit oil":{r:"yellow",e:"Olivenöl – pflegend aber komedogen",c:"Nicht ideal bei Akne",cat:"Öl"},
+  "coconut oil":            {r:"yellow",e:"Kokosöl – sehr pflegend aber stark komedogen",c:"Stopft bei vielen Hauttypen die Poren",cat:"Öl"},
+  "cocos nucifera oil":     {r:"yellow",e:"Kokosöl – komedogen, für Gesicht weniger geeignet",c:"Kann Akne verursachen",cat:"Öl"},
+  "shea butter":            {r:"green",e:"Sheabutter – sehr nährend, für trockene Haut ideal",c:"Bei sehr öliger Haut sparsam anwenden",cat:"Butter"},
+  "butyrospermum parkii butter":{r:"green",e:"Sheabutter – intensive Pflege, für trockene Haut",c:null,cat:"Butter"},
+  "sunflower seed oil":     {r:"green",e:"Sonnenblumenöl – leicht, reich an Linolsäure",c:null,cat:"Öl"},
+  "helianthus annuus seed oil":{r:"green",e:"Sonnenblumenöl – leicht, nicht komedogen",c:null,cat:"Öl"},
+  "marula oil":             {r:"green",e:"Marulaöl – leicht, anti-oxidativ, nicht komedogen",c:null,cat:"Öl"},
+  "sea buckthorn oil":      {r:"green",e:"Sanddornöl – Orange, reich an Omega 7",c:"Färbt leicht gelblich-orange",cat:"Öl"},
+  "hemp seed oil":          {r:"green",e:"Hanfsamenöl – optimales Omega 3:6 Verhältnis, beruhigend",c:null,cat:"Öl"},
+  "cannabis sativa seed oil":{r:"green",e:"Hanfsamenöl – anti-entzündlich, balancierend",c:null,cat:"Öl"},
+  "caprylic/capric triglyceride":{r:"green",e:"Mittelkettiger Ester aus Kokos – leicht, nicht komedogen",c:null,cat:"Emolliens"},
+  "isopropyl myristate":    {r:"red",e:"Synthetischer Ester – Weichmacher",c:"Stark komedogen, verstopft Poren, für Akne-Haut ungeeignet",cat:"Emolliens"},
+  "isopropyl palmitate":    {r:"red",e:"Synthetischer Ester",c:"Komedogen, kann Hautunreinheiten fördern",cat:"Emolliens"},
+  "mineral oil":            {r:"yellow",e:"Mineralöl – bildet Okklusivfilm auf der Haut",c:"Petrochemisch gewonnen, bildet dichten Film, verhindert Atmung der Haut",cat:"Öl"},
+  "paraffinum liquidum":    {r:"yellow",e:"Flüssiges Paraffin – Okklusivum aus Erdöl",c:"Petrochemisch, bildet Film, ökologisch bedenklich",cat:"Okklusivum"},
+  "petrolatum":             {r:"yellow",e:"Vaseline – sehr effektives Okklusivum aus Erdöl",c:"Petrochemisch, aber laut EWG sicher wenn raffiniert",cat:"Okklusivum"},
+  "dimethicone":            {r:"yellow",e:"Silikon – glättet, versiegelt Haut und Haare",c:"Synthetisch, nicht biologisch abbaubar, kann Poren verstopfen",cat:"Silikon"},
+  "cyclomethicone":         {r:"yellow",e:"Leichtflüchtiges Silikon",c:"Umweltschädlich, bioakkumuliert in Gewässern (in EU für Wash-off eingeschränkt)",cat:"Silikon"},
+  "cyclopentasiloxane":     {r:"red",e:"Flüchtiges Silikon",c:"In EU eingeschränkt wegen Bioakkumulation in Gewässern",cat:"Silikon"},
+  "cyclotetrasiloxane":     {r:"red",e:"Cyclisches Silikon (D4)",c:"EU-eingeschränkt, reproduktionstoxisch im Tierversuch",cat:"Silikon"},
+
+  // ── EMULGATOREN & TENSIDE ──
+  "cetyl alcohol":          {r:"green",e:"Fettalkohol aus Palmöl – Emulgator, verbessert Textur",c:null,cat:"Emulgator"},
+  "stearyl alcohol":        {r:"green",e:"Fettalkohol – verdickend, hautweichmachend",c:null,cat:"Emulgator"},
+  "cetearyl alcohol":       {r:"green",e:"Fettalkohol-Gemisch – Emulgator, cremige Textur",c:"Selten Reaktion bei echter Alkohol-Allergie",cat:"Emulgator"},
+  "ceteareth-20":           {r:"yellow",e:"Emulgator aus Fettalkohol + Ethylenoxid",c:"Ethoxylierung kann Dioxan-Rückstände hinterlassen",cat:"Emulgator"},
+  "polysorbate 20":         {r:"yellow",e:"Emulgator, löslichmacher",c:"Kann mit Dioxan-Rückständen verunreinigt sein",cat:"Emulgator"},
+  "polysorbate 80":         {r:"yellow",e:"Emulgator für Öl-in-Wasser",c:"Dioxan-Rückstände möglich, kann komedogen sein",cat:"Emulgator"},
+  "peg-100 stearate":       {r:"yellow",e:"PEG-Emulgator",c:"PEG kann die Hautbarriere schwächen",cat:"Emulgator"},
+  "sodium lauryl sulfate":  {r:"red",e:"SLS – starkes Tensid, schäumend",c:"Aggressiv für Haut und Schleimhäute, schädigt Hautbarriere",cat:"Tensid"},
+  "sodium laureth sulfate": {r:"red",e:"SLES – mildes Tensid, schäumend",c:"Potenzielle Dioxan-Verunreinigung, irritierend bei Dauerkontakt",cat:"Tensid"},
+  "sodium coco sulfate":    {r:"yellow",e:"Tensid aus Kokos – schäumend",c:"Milder als SLS, aber noch reizend bei sensibler Haut",cat:"Tensid"},
+  "cocamidopropyl betaine": {r:"yellow",e:"Amphoteres Tensid – mild, schäumend",c:"Bei manchen Personen allergische Reaktion möglich",cat:"Tensid"},
+  "decyl glucoside":        {r:"green",e:"Mildes Zuckertensid – sanft, biologisch abbaubar",c:null,cat:"Tensid"},
+  "coco glucoside":         {r:"green",e:"Sehr mildes Tensid aus Kokos und Zucker",c:null,cat:"Tensid"},
+  "lauryl glucoside":       {r:"green",e:"Mildes Zuckertensid",c:null,cat:"Tensid"},
+  "sodium cocoamphoacetate":{r:"green",e:"Mildes amphoteres Tensid – für sensitive Haut",c:null,cat:"Tensid"},
+
+  // ── KONSERVIERUNGSMITTEL ──
+  "phenoxyethanol":         {r:"yellow",e:"Breites Wirkungsspektrum gegen Bakterien und Pilze",c:"Bei Säuglingen und sehr sensitiver Haut vermeiden (>1% Konzentration)",cat:"Konservierung"},
+  "methylparaben":          {r:"red",e:"Konservierungsmittel mit breitem Wirkspektrum",c:"Verdächtiger Östrogen-Mimetiker (Hormondisruptor), in Brust-Tumorgewebe nachgewiesen",cat:"Konservierung"},
+  "ethylparaben":           {r:"red",e:"Paraben-Konservierungsmittel",c:"Schwacher Hormondisruptor, in der EU zugelassen aber umstritten",cat:"Konservierung"},
+  "propylparaben":          {r:"red",e:"Paraben – stärkerer Hormondisruptor als Methylparaben",c:"WHO-gelistet als endokriner Disruptor, in Dänemark für Kinder verboten",cat:"Konservierung"},
+  "butylparaben":           {r:"red",e:"Stärkstes Paraben",c:"Stärkster Hormondisruptor der Parabene, für Kinder verboten",cat:"Konservierung"},
+  "isobutylparaben":        {r:"red",e:"Paraben-Konservierungsmittel",c:"Stark hormonstörend, in vielen Ländern eingeschränkt",cat:"Konservierung"},
+  "benzyl alcohol":         {r:"yellow",e:"Konservierungsmittel, Lösungsmittel",c:"Kann bei empfindlicher Haut und Allergikern reagieren",cat:"Konservierung"},
+  "sodium benzoate":        {r:"yellow",e:"Konservierungsmittel aus Benzoesäure",c:"In Kombination mit Vitamin C entsteht Benzol (krebserregend)",cat:"Konservierung"},
+  "potassium sorbate":      {r:"green",e:"Natürliches Konservierungsmittel aus Sorbinsäure",c:null,cat:"Konservierung"},
+  "dehydroacetic acid":     {r:"yellow",e:"Konservierungsmittel, oft mit Benzylalkohol kombiniert",c:"Selten allergische Reaktionen",cat:"Konservierung"},
+  "ethylhexylglycerin":     {r:"green",e:"Multifunktional: Konservierungshilfsstoff + Feuchthaltemittel",c:null,cat:"Konservierung"},
+  "caprylyl glycol":        {r:"green",e:"Milderes Konservierungshilfsmittel + Feuchthaltemittel",c:null,cat:"Konservierung"},
+  "sodium hydroxymethylglycinate":{r:"yellow",e:"Konservierungsmittel",c:"Kann Formaldehyd freisetzen – Vorsicht bei Formaldehyd-Allergie",cat:"Konservierung"},
+  "dmdm hydantoin":         {r:"red",e:"Konservierungsmittel",c:"Formaldehyd-Freisetzer – krebsverdächtig, allergieauslösend",cat:"Konservierung"},
+  "imidazolidinyl urea":    {r:"red",e:"Konservierungsmittel",c:"Formaldehyd-Freisetzer, häufige Kontaktallergie",cat:"Konservierung"},
+  "quaternium-15":          {r:"red",e:"Konservierungsmittel",c:"Starker Formaldehyd-Freisetzer, in EU eingeschränkt",cat:"Konservierung"},
+  "methylisothiazolinone":  {r:"red",e:"MI – starkes Konservierungsmittel",c:"Häufigste Ursache für Kontaktallergien in Europa, für Leave-on in EU verboten",cat:"Konservierung"},
+  "methylchloroisothiazolinone":{r:"red",e:"MCI – starkes Konservierungsmittel",c:"Hautsensiblisierend, häufig Auslöser für Kontaktekzeme",cat:"Konservierung"},
+  "chlorphenesin":          {r:"yellow",e:"Konservierungsmittel",c:"Kann reizen, in hohen Konzentrationen bedenklich",cat:"Konservierung"},
+  "sorbic acid":            {r:"green",e:"Natürliches Konservierungsmittel aus Vogelbeere",c:null,cat:"Konservierung"},
+  "benzoic acid":           {r:"yellow",e:"Konservierungsmittel",c:"Kann reizen, mit Vitamin C zu Benzol reagieren",cat:"Konservierung"},
+
+  // ── VERDICKER & TEXTUR ──
+  "carbomer":               {r:"yellow",e:"Polymer – Verdicker für Gele",c:"Synthetisch, petrochemisch, ökologisch fraglich",cat:"Textur"},
+  "xanthan gum":            {r:"green",e:"Natürliches Verdickungsmittel aus Fermentation",c:null,cat:"Textur"},
+  "hydroxyethylcellulose":  {r:"green",e:"Verdicker aus Zellulose",c:null,cat:"Textur"},
+  "carrageenan":            {r:"yellow",e:"Verdicker aus Rotalgen",c:"Niedermolekulare Form potenziell entzündungsfördernd",cat:"Textur"},
+  "gelatin":                {r:"yellow",e:"Verdicker aus tierischen Knochen",c:"Nicht vegan",cat:"Textur"},
+  "mica":                   {r:"green",e:"Natürliches Mineral – Glanz und Schimmer",c:"Abbaubedingungen teilweise ethisch problematisch",cat:"Füllstoff"},
+
+  // ── DUFTSTOFFE & PARFUM ──
+  "parfum":                 {r:"yellow",e:"Duftstoffmischung – meist nicht offengelegt",c:"Häufigster Auslöser für Kontaktallergien, kann bis zu 100 Einzelstoffe enthalten",cat:"Duftstoff"},
+  "fragrance":              {r:"yellow",e:"Parfümierung – undeklariered Mischung",c:"Kann Allergene enthalten, für sensitive Haut meiden",cat:"Duftstoff"},
+  "limonene":               {r:"yellow",e:"Natürliches Duftstoffmolekül aus Zitrus",c:"Einer der 26 deklarationspflichtigen Allergene",cat:"Duftstoff/Allergen"},
+  "linalool":               {r:"yellow",e:"Natürliches Duftstoffmolekül aus Lavendel/Koriander",c:"Deklarationspflichtiges Allergen, oxidiert zu Irritanten",cat:"Duftstoff/Allergen"},
+  "citronellol":            {r:"yellow",e:"Natürlicher Duft, in Rosen und Geranien",c:"Deklarationspflichtiges Allergen",cat:"Duftstoff/Allergen"},
+  "geraniol":               {r:"yellow",e:"Blumiger Duftstoff aus Rosen, Palmarosa",c:"Deklarationspflichtiges Allergen",cat:"Duftstoff/Allergen"},
+  "benzyl benzoate":        {r:"yellow",e:"Duftstoff und Lösungsmittel",c:"Deklarationspflichtiges Allergen",cat:"Duftstoff/Allergen"},
+  "eugenol":                {r:"yellow",e:"Duftstoff aus Nelken",c:"Deklarationspflichtiges Allergen, kann stark reizen",cat:"Duftstoff/Allergen"},
+  "coumarin":               {r:"yellow",e:"Süßlicher Duftstoff, in Tonkabohne",c:"Deklarationspflichtiges Allergen, in hohen Dosen lebertoxisch",cat:"Duftstoff/Allergen"},
+  "cinnamyl alcohol":       {r:"yellow",e:"Zimtduftstoff",c:"Deklarationspflichtiges Allergen",cat:"Duftstoff/Allergen"},
+  "cinnamal":               {r:"red",e:"Zimtaldehyd – intensiver Duftstoff",c:"Sehr häufiger Auslöser von Kontaktallergien",cat:"Duftstoff/Allergen"},
+  "isoeugenol":             {r:"red",e:"Duftstoff",c:"Starkes Kontaktallergen, EU-weit eingeschränkt",cat:"Duftstoff/Allergen"},
+  "musk":                   {r:"yellow",e:"Moschusduft – synthetisch oder tierisch",c:"Nitromoschusverbindungen krebsverdächtig, polyzyklische Muschus bioakkumulieren",cat:"Duftstoff"},
+
+  // ── SONNENSCHUTZFILTER ──
+  "octocrylene":            {r:"yellow",e:"UV-B und UV-A2 Filter",c:"Verdacht auf Hormonstörung, kann Korallenriffe schädigen",cat:"UV-Filter"},
+  "ethylhexyl methoxycinnamate":{r:"yellow",e:"Octinoxat – UV-B-Filter, am häufigsten verwendet",c:"Hormonell aktiv im Tierversuch, Korallen-schädigend",cat:"UV-Filter"},
+  "octinoxate":             {r:"yellow",e:"UV-B-Filter",c:"Möglicher Hormondisruptor, in Hawaii verboten",cat:"UV-Filter"},
+  "benzophenone-3":         {r:"red",e:"Oxybenzon – UV-A und UV-B-Filter",c:"Starker Hormondisruptor, in Hawaii verboten, dringt tief in Haut ein",cat:"UV-Filter"},
+  "oxybenzone":             {r:"red",e:"UV-Breitbandfilter",c:"Hormonstörend, in Muttermilch nachgewiesen",cat:"UV-Filter"},
+  "homosalate":             {r:"yellow",e:"UV-B-Filter",c:"Potenzieller Hormondisruptor, SCCS empfiehlt Konzentrationsreduktion",cat:"UV-Filter"},
+  "avobenzone":             {r:"yellow",e:"UV-A-Filter – Breitschutz",c:"Photostabilität begrenzt, kann mit Octinoxat zu gefährlichen Verbindungen reagieren",cat:"UV-Filter"},
+
+  // ── FARBSTOFFE ──
+  "ci 77891":               {r:"green",e:"Titandioxid-Weißpigment",c:null,cat:"Farbstoff"},
+  "ci 77491":               {r:"green",e:"Eisenoxid (rot) – natürliches Mineral",c:null,cat:"Farbstoff"},
+  "ci 77492":               {r:"green",e:"Eisenoxid (gelb) – natürliches Mineral",c:null,cat:"Farbstoff"},
+  "ci 77499":               {r:"green",e:"Eisenoxid (schwarz) – natürliches Mineral",c:null,cat:"Farbstoff"},
+  "red 40":                 {r:"yellow",e:"Synthetischer Azofarbstoff",c:"ADHS-Zusammenhang bei Kindern diskutiert",cat:"Farbstoff"},
+  "red 3":                  {r:"red",e:"Erythrosin – synthetischer Farbstoff",c:"In der EU für Kosmetik nicht mehr zugelassen, krebsverdächtig",cat:"Farbstoff"},
+  "blue 1":                 {r:"yellow",e:"Brillantblau – synthetischer Farbstoff",c:"Kann bei manchen Personen Allergien auslösen",cat:"Farbstoff"},
+
+  // ── SUPPLEMENT-INHALTSSTOFFE ──
+  "cholecalciferol":        {r:"green",e:"Vitamin D3 – essentiell für Knochen, Immunsystem, Stimmung",c:null,cat:"Vitamin"},
+  "ergocalciferol":         {r:"green",e:"Vitamin D2 – pflanzliche D-Vitamin Quelle",c:null,cat:"Vitamin"},
+  "cyanocobalamin":         {r:"green",e:"Vitamin B12 – essentiell für Nerven und Blutbildung",c:null,cat:"Vitamin"},
+  "methylcobalamin":        {r:"green",e:"Aktive Form von Vitamin B12 – besser bioverfügbar",c:null,cat:"Vitamin"},
+  "pyridoxine hydrochloride":{r:"green",e:"Vitamin B6 – Nerven, Protein-Stoffwechsel",c:"Überdosierung (>200mg/d) kann Nervenschäden verursachen",cat:"Vitamin"},
+  "thiamine":               {r:"green",e:"Vitamin B1 – Energie-Stoffwechsel",c:null,cat:"Vitamin"},
+  "riboflavin":             {r:"green",e:"Vitamin B2 – Energiestoffwechsel, Antioxidans",c:null,cat:"Vitamin"},
+  "folic acid":             {r:"green",e:"Vitamin B9 – essentiell in der Schwangerschaft, Zellteilung",c:null,cat:"Vitamin"},
+  "folate":                 {r:"green",e:"Folsäure – aktive Form, besser für MTHFR-Varianten",c:null,cat:"Vitamin"},
+  "biotin":                 {r:"green",e:"Vitamin B7 – Haare, Haut, Nägel, Energiestoffwechsel",c:null,cat:"Vitamin"},
+  "ascorbic acid":          {r:"green",e:"Vitamin C – Immunsystem, Kollagen, Antioxidans",c:null,cat:"Vitamin"},
+  "retinol acetate":        {r:"yellow",e:"Vitamin A – Sehkraft, Immunsystem",c:"Überdosierung teratogen (schädlich in Schwangerschaft)",cat:"Vitamin"},
+  "zinc gluconate":         {r:"green",e:"Zink – Immunsystem, Wundheilung, gut bioverfügbar",c:null,cat:"Mineral"},
+  "zinc oxide":             {r:"yellow",e:"Zink – gut bioverfügbar, aber Nanopartikel umstritten",c:null,cat:"Mineral"},
+  "zinc sulfate":           {r:"yellow",e:"Zinksulfat – günstig aber geringe Bioverfügbarkeit",c:"Kann Magen reizen",cat:"Mineral"},
+  "magnesium citrate":      {r:"green",e:"Magnesium – sehr gut bioverfügbar, Muskeln, Nerven",c:null,cat:"Mineral"},
+  "magnesium oxide":        {r:"yellow",e:"Magnesiumoxid – günstig aber schlechteste Bioverfügbarkeit",c:"Laxierende Wirkung bei hoher Dosis",cat:"Mineral"},
+  "magnesium glycinate":    {r:"green",e:"Magnesium – beste Bioverfügbarkeit, sanft für Magen",c:null,cat:"Mineral"},
+  "calcium carbonate":      {r:"yellow",e:"Kalzium – wichtig für Knochen, mäßige Bioverfügbarkeit",c:"Verringert Eisenabsorption, besser mit Mahlzeit nehmen",cat:"Mineral"},
+  "calcium citrate":        {r:"green",e:"Kalzium – bessere Bioverfügbarkeit als Carbonat",c:null,cat:"Mineral"},
+  "ferrous sulfate":        {r:"yellow",e:"Eisen – wichtig bei Anämie",c:"Kann Verstopfung und Übelkeit verursachen",cat:"Mineral"},
+  "ferrous bisglycinate":   {r:"green",e:"Eisen – beste Bioverfügbarkeit, magenfreundlich",c:null,cat:"Mineral"},
+  "omega-3":                {r:"green",e:"Omega-3-Fettsäuren – Herz, Gehirn, anti-entzündlich",c:null,cat:"Fettsäure"},
+  "epa":                    {r:"green",e:"Eicosapentaensäure – anti-entzündlich",c:null,cat:"Fettsäure"},
+  "dha":                    {r:"green",e:"Docosahexaensäure – Gehirnfunktion, Sehvermögen",c:null,cat:"Fettsäure"},
+  "fish oil":               {r:"green",e:"Fischöl – reich an EPA und DHA",c:"Nicht vegan, Schwermetall-Belastung abhängig von Qualität",cat:"Fettsäure"},
+  "creatine monohydrate":   {r:"green",e:"Kreatin – Muskelkraft und -aufbau, gut erforscht",c:"Bei Nierenproblemen vorher Arzt fragen",cat:"Sportergänzung"},
+  "whey protein":           {r:"green",e:"Molkenprotein – hochwertig, alle essentiellen Aminosäuren",c:"Nicht für Laktose-Intolerante oder Veganer",cat:"Protein"},
+  "collagen":               {r:"green",e:"Kollagen – Haut, Gelenke, Knochen",c:"Tierisch, nicht vegan",cat:"Protein"},
+  "collagen hydrolysate":   {r:"green",e:"Hydrolysiertes Kollagen – bessere Bioverfügbarkeit",c:"Tierischen Ursprungs",cat:"Protein"},
+  "l-glutamine":            {r:"green",e:"Glutamin – Darmgesundheit, Immunsystem",c:null,cat:"Aminosäure"},
+  "l-carnitine":            {r:"yellow",e:"Carnitin – Fetttransport in Mitochondrien",c:"TMAO-Bildung im Darm bei hoher Dosis möglicherweise kardiovaskulär relevant",cat:"Aminosäure"},
+  "coenzyme q10":           {r:"green",e:"CoQ10 – Mitochondrien-Energie, Antioxidans",c:null,cat:"Wirkstoff"},
+  "melatonin":              {r:"yellow",e:"Schlafhormon – hilft beim Einschlafen",c:"Nicht langfristig ohne ärztliche Begleitung empfohlen",cat:"Hormon"},
+  "ashwagandha":            {r:"green",e:"Adaptogen – Stressreduktion, Cortisol-regulierend",c:"Nicht in Schwangerschaft",cat:"Pflanzenwirkstoff"},
+  "turmeric":               {r:"green",e:"Kurkuma – stark anti-entzündlich, antioxidativ",c:"Blutgerinnungshemmend in hohen Dosen",cat:"Pflanzenwirkstoff"},
+  "curcumin":               {r:"green",e:"Curcumin – aktiver Wirkstoff aus Kurkuma",c:"Geringe Bioverfügbarkeit ohne Piperin",cat:"Pflanzenwirkstoff"},
+  "quercetin":              {r:"green",e:"Flavonoid – anti-entzündlich, antioxidativ, immunmodulierend",c:null,cat:"Pflanzenwirkstoff"},
+  "probiotic":              {r:"green",e:"Probiotika – unterstützen Darmflora und Immunsystem",c:null,cat:"Probiotikum"},
+  "lactobacillus":          {r:"green",e:"Probiotischer Bakterienstamm – Darmgesundheit",c:null,cat:"Probiotikum"},
+  "bifidobacterium":        {r:"green",e:"Probiotischer Bakterienstamm – Verdauung, Immunsystem",c:null,cat:"Probiotikum"},
+  "inulin":                 {r:"green",e:"Präbiotikum – Nahrung für gute Darmbakterien",c:"Bei hoher Dosis Blähungen möglich",cat:"Präbiotikum"},
+  "maltodextrin":           {r:"yellow",e:"Kohlenhydrat als Füllstoff und Träger",c:"Hoher glykämischer Index, aufgefüllte Gesamtkalorien beachten",cat:"Füllstoff"},
+  "magnesium stearate":     {r:"yellow",e:"Fließmittel in Tabletten",c:"Kann laut einigen Studien Nährstoffabsorption leicht reduzieren",cat:"Hilfsstoff"},
+  "titanium dioxide":       {r:"yellow",e:"Weißes Pigment in Tabletten-Überzügen",c:"In Nanoform möglicherweise genotoxisch",cat:"Hilfsstoff"},
+  "gelatin capsule":        {r:"yellow",e:"Gelatine-Kapsel",c:"Nicht vegan (Tierprodukt)",cat:"Hilfsstoff"},
+  "hydroxypropyl methylcellulose":{r:"green",e:"HPMC – pflanzliche Kapsel, vegan",c:null,cat:"Hilfsstoff"},
+  "silicon dioxide":        {r:"yellow",e:"Siliciumdioxid – Rieselhilfsmittel",c:"In Nanoform gesundheitlich diskutiert",cat:"Hilfsstoff"},
+  "artificial flavors":     {r:"yellow",e:"Künstliche Aromen",c:"Vage Bezeichnung, genaue Zusammensetzung unbekannt",cat:"Aroma"},
+  "natural flavors":        {r:"yellow",e:"Natürliche Aromen – oft nicht weiter spezifiziert",c:"Kann tierische Bestandteile enthalten",cat:"Aroma"},
+  "sucralose":              {r:"yellow",e:"Kunstsüßstoff",c:"Verändert möglicherweise das Darmmikrobiom",cat:"Süßungsmittel"},
+  "stevia":                 {r:"green",e:"Pflanzlicher Süßstoff – kalorienfrei",c:null,cat:"Süßungsmittel"},
+  "xylitol":                {r:"green",e:"Zuckeralkohol – gut für Zähne, kalorienreduziert",c:"In großen Mengen laxierend",cat:"Süßungsmittel"},
+  "sorbitol":               {r:"yellow",e:"Zuckeralkohol – als Feuchthaltemittel oder Süßungsmittel",c:"Kann Verdauungsbeschwerden auslösen",cat:"Süßungsmittel"},
+  "aspartame":              {r:"yellow",e:"Kunstsüßstoff",c:"Zu meiden bei PKU, WHO klassifiziert als möglicherweise krebserregend (2023)",cat:"Süßungsmittel"},
+  "acesulfame potassium":   {r:"yellow",e:"Ace-K – Kunstsüßstoff",c:"Tierversuche zeigten mögliche Wirkungen auf Darmflora",cat:"Süßungsmittel"},
+};
+
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+const state = {
+  apiKey: localStorage.getItem('iq_apikey') || '',
+  profile: JSON.parse(localStorage.getItem('iq_profile') || '{"skins":[],"intolerances":"","goals":"","vegan":false,"pregnant":false,"natural":false}'),
+  recent: JSON.parse(localStorage.getItem('iq_recent') || '[]'),
+  currentAnalysis: null, currentProduct: null, activeIngFilter: 'all',
+  scanStream: null, scanner: null, scanActive: false,
+};
+
+// ══════════════════════════════════════════════════════════════
+// NAV
+// ══════════════════════════════════════════════════════════════
+const NAV = [{id:'home',icon:'⬡',label:'SCAN'},{id:'result',icon:'◈',label:'ANALYSE'},{id:'alternatives',icon:'↗',label:'BESSER'},{id:'profile',icon:'◉',label:'PROFIL'}];
+function buildNav(cid, active) {
+  const el = document.getElementById(cid); if(!el) return;
+  el.innerHTML = `<div style="display:flex;justify-content:space-around;align-items:center;padding:10px 0;padding-bottom:calc(10px + env(safe-area-inset-bottom,20px));background:rgba(10,24,16,0.97);border-top:0.5px solid rgba(255,255,255,0.08);backdrop-filter:blur(20px)">
+    ${NAV.map(n=>`<button class="nav-btn ${n.id===active?'active':''}" onclick="showScreen('${n.id}')">
+      <span class="nav-icon">${n.icon}</span><span class="nav-label">${n.label}</span></button>`).join('')}</div>`;
+}
+['nav','nav-result','nav-alt','nav-profile'].forEach(id => buildNav(id, 'home'));
+
+function showScreen(id) {
+  stopScan();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  ['nav','nav-result','nav-alt','nav-profile'].forEach(n => buildNav(n, id));
+}
+
+// ══════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════
+function toast(msg, dur=2800) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ══════════════════════════════════════════════════════════════
+// API KEY
+// ══════════════════════════════════════════════════════════════
+function showApiSetup() { document.getElementById('api-key-input').value = state.apiKey; document.getElementById('api-setup').classList.add('show'); }
+function closeApiSetup() { document.getElementById('api-setup').classList.remove('show'); }
+function saveApiKey() {
+  state.apiKey = document.getElementById('api-key-input').value.trim();
+  localStorage.setItem('iq_apikey', state.apiKey);
+  closeApiSetup(); updateModeIndicator(); toast('✓ API Key gespeichert');
+}
+function updateModeIndicator() {
+  const ind = document.getElementById('mode-indicator'); const txt = document.getElementById('mode-text');
+  if(state.apiKey) { ind.className='mode-badge mode-ai'; txt.textContent='Claude KI-Analyse aktiv'; }
+  else { ind.className='mode-badge mode-local'; txt.textContent='Lokale Datenbank — kein API Key nötig'; }
+}
+updateModeIndicator();
+
+// ══════════════════════════════════════════════════════════════
+// PROFILE
+// ══════════════════════════════════════════════════════════════
+function loadProfileUI() {
+  const p = state.profile;
+  document.querySelectorAll('.skin-btn').forEach(b => b.classList.toggle('selected', p.skins.includes(b.dataset.val)));
+  document.getElementById('prof-intolerances').value = p.intolerances || '';
+  document.getElementById('prof-goals').value = p.goals || '';
+  document.getElementById('pref-vegan').checked = p.vegan;
+  document.getElementById('pref-pregnant').checked = p.pregnant;
+  document.getElementById('pref-natural').checked = p.natural;
+}
+function toggleSkin(btn) { btn.classList.toggle('selected'); }
+function saveProfile() {
+  state.profile = { skins: [...document.querySelectorAll('.skin-btn.selected')].map(b=>b.dataset.val), intolerances: document.getElementById('prof-intolerances').value, goals: document.getElementById('prof-goals').value, vegan: document.getElementById('pref-vegan').checked, pregnant: document.getElementById('pref-pregnant').checked, natural: document.getElementById('pref-natural').checked };
+  localStorage.setItem('iq_profile', JSON.stringify(state.profile)); toast('✓ Profil gespeichert');
+}
+loadProfileUI();
+
+// ══════════════════════════════════════════════════════════════
+// RECENT
+// ══════════════════════════════════════════════════════════════
+function addRecent(product, analysis) {
+  const item = {barcode:product.barcode||'',name:product.name||'Unbekannt',score:analysis.overallScore,type:product.type||'Kosmetik',ts:Date.now()};
+  state.recent = [item,...state.recent.filter(r=>r.barcode!==item.barcode)].slice(0,8);
+  localStorage.setItem('iq_recent', JSON.stringify(state.recent)); renderRecent();
+}
+function renderRecent() {
+  const s = document.getElementById('recent-section'); const l = document.getElementById('recent-list');
+  if(!state.recent.length){s.style.display='none';return;}
+  s.style.display='block';
+  l.innerHTML = state.recent.slice(0,3).map(r=>{
+    const c=r.score>=75?'#4CAF50':r.score>=50?'#FFB300':'#E53935';
+    return `<div onclick="reloadRecent('${r.barcode}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:0.5px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:6px;cursor:pointer">
+      <div><div style="font-size:13px;color:var(--text)">${r.name}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${r.type}</div></div>
+      <div style="font-family:var(--serif);font-size:20px;color:${c}">${r.score}</div></div>`;}).join('');
+}
+renderRecent();
+
+// ══════════════════════════════════════════════════════════════
+// SCANNER
+// ══════════════════════════════════════════════════════════════
+async function startScan() {
+  try {
+    document.getElementById('scan-placeholder').style.display='none';
+    document.getElementById('scan-active').style.display='block';
+    const video = document.getElementById('scanner-video');
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    video.srcObject = stream; state.scanStream = stream; state.scanActive = true;
+    if(typeof ZXing !== 'undefined') {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.UPC_A]);
+      const reader = new ZXing.BrowserMultiFormatReader(hints); state.scanner = reader;
+      reader.decodeFromVideoDevice(null, video, (result,err) => {
+        if(result && state.scanActive) { stopScan(); const code=result.getText(); toast('📷 '+code); fetchAndAnalyze(code); }
+      });
+    } else { toast('Scanner lädt… bitte kurz warten'); setTimeout(startScan,1500); }
+  } catch(e) { toast('⚠ Kamerazugriff verweigert. Safari-Einstellungen prüfen.'); stopScan(); }
+}
+function stopScan() {
+  state.scanActive=false;
+  if(state.scanner){try{state.scanner.reset();}catch(e){}state.scanner=null;}
+  if(state.scanStream){state.scanStream.getTracks().forEach(t=>t.stop());state.scanStream=null;}
+  document.getElementById('scan-placeholder').style.display='flex';
+  document.getElementById('scan-active').style.display='none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANUAL
+// ══════════════════════════════════════════════════════════════
+function manualAnalyze() {
+  const barcode = document.getElementById('manual-barcode').value.trim();
+  const inci = document.getElementById('manual-inci').value.trim();
+  if(barcode){fetchAndAnalyze(barcode);return;}
+  if(inci){runAnalysis({name:'Manuell eingegeben',type:'Kosmetik',ingredients_text:inci,barcode:'manual_'+Date.now()},inci);return;}
+  toast('⚠ Bitte Barcode oder INCI-Liste eingeben.');
+}
+
+// ══════════════════════════════════════════════════════════════
+// FETCH PRODUCT
+// ══════════════════════════════════════════════════════════════
+async function fetchAndAnalyze(barcode) {
+  showLoadingScreen(['Barcode erkannt…','Produktdatenbank wird abgefragt…','Inhaltsstoffe werden analysiert…','Bewertung wird erstellt…']);
+  try {
+    let product = null;
+    const bRes = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${barcode}.json`).catch(()=>null);
+    if(bRes&&bRes.ok){const d=await bRes.json();if(d.status===1&&d.product) product=parseProduct(d.product,barcode,'Kosmetik');}
+    if(!product){const fRes=await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`).catch(()=>null);if(fRes&&fRes.ok){const d=await fRes.json();if(d.status===1&&d.product) product=parseProduct(d.product,barcode,detectType(d.product));}}
+    if(!product) product={name:'Produkt #'+barcode,type:'Kosmetik',ingredients_text:'',barcode,unknown:true};
+    await runAnalysis(product, product.ingredients_text||'');
+  } catch(e) { toast('⚠ Fehler beim Laden der Produktdaten'); showScreen('home'); }
+}
+function parseProduct(p,barcode,type){return{barcode,name:p.product_name||p.product_name_de||'Unbekanntes Produkt',brand:p.brands||'',type,image:p.image_front_url||p.image_url||'',ingredients_text:p.ingredients_text||p.ingredients_text_de||'',categories:p.categories||''};}
+function detectType(p){const c=(p.categories||'').toLowerCase();return(c.includes('supplement')||c.includes('vitamine')||c.includes('protein')||c.includes('ergänzung'))?'Supplement':'Kosmetik';}
+
+// ══════════════════════════════════════════════════════════════
+// LOADING
+// ══════════════════════════════════════════════════════════════
+function showLoadingScreen(steps) {
+  showScreen('loading');
+  document.getElementById('loading-steps').innerHTML = steps.map((s,i)=>`
+    <div id="ls${i}" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;opacity:${i===0?1:0.2};transition:opacity 0.3s">
+      <div id="lsd${i}" style="width:16px;height:16px;border-radius:50%;background:${i===0?'var(--gold)':'rgba(255,255,255,0.1)'};flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px"></div>
+      <span style="font-size:11px;color:${i===0?'var(--gold)':'rgba(255,255,255,0.4)'}">${s}</span></div>`).join('');
+  let cur=0;
+  state.loadInterval = setInterval(()=>{
+    if(cur<steps.length-1){
+      const d=document.getElementById(`lsd${cur}`);if(d){d.style.background='var(--green)';d.textContent='✓';}
+      cur++;
+      const step=document.getElementById(`ls${cur}`);const dot=document.getElementById(`lsd${cur}`);
+      if(step)step.style.opacity='1';if(dot)dot.style.background='var(--gold)';
+      document.getElementById('loading-sub').textContent=steps[cur]||'Fast fertig…';
+    }
+  },700);
+}
+function stopLoadingInterval(){clearInterval(state.loadInterval);}
+
+// ══════════════════════════════════════════════════════════════
+// LOCAL DATABASE ANALYSIS
+// ══════════════════════════════════════════════════════════════
+function analyzeLocally(product, ingredientsText) {
+  const rawIngredients = (ingredientsText||'').split(/[,;\/\n]/).map(i=>i.replace(/[\[\]\(\)\*]/g,'').trim().toLowerCase()).filter(i=>i.length>1&&i.length<80);
+  const analyzed = [];
+  const unknown = [];
+
+  for(const raw of rawIngredients) {
+    let matched = null;
+    // Exact match first
+    if(INGREDIENT_DB[raw]) { matched = {name:toTitleCase(raw), ...INGREDIENT_DB[raw]}; }
+    else {
+      // Partial match
+      for(const key of Object.keys(INGREDIENT_DB)) {
+        if(raw.includes(key) || key.includes(raw)) { matched = {name:toTitleCase(raw), ...INGREDIENT_DB[key]}; break; }
+      }
+    }
+    if(matched) { if(!analyzed.find(a=>a.name===matched.name)) analyzed.push(matched); }
+    else if(raw.length>2) unknown.push(toTitleCase(raw));
+  }
+
+  // Add unknown ingredients as unclassified
+  for(const u of unknown.slice(0,15)) {
+    if(!analyzed.find(a=>a.name.toLowerCase()===u.toLowerCase())) {
+      analyzed.push({name:u,r:'yellow',e:'Inhaltsstoff in lokaler Datenbank nicht gefunden – für Details API Key hinterlegen',c:null,cat:'Unklassifiziert'});
+    }
+  }
+
+  // Calculate score
+  const total = analyzed.length||1;
+  const greenN = analyzed.filter(i=>i.r==='green').length;
+  const yellowN = analyzed.filter(i=>i.r==='yellow').length;
+  const redN = analyzed.filter(i=>i.r==='red').length;
+  const baseScore = Math.round((greenN*100 + yellowN*60 + redN*10) / total);
+  const overallScore = Math.min(98, Math.max(12, baseScore));
+
+  // Category scores
+  const harmfulChemicals = analyzed.filter(i=>i.cat==='Konservierung'&&i.r==='red').length;
+  const goodActives = analyzed.filter(i=>i.cat==='Wirkstoff'&&i.r==='green').length;
+  const wirksamkeit = Math.min(95, 50 + goodActives*8 + greenN*2 - redN*5);
+  const vertraeglichkeit = Math.min(98, 90 - redN*12 - yellowN*4 - harmfulChemicals*8);
+  const nachhaltigkeit = Math.min(95, 70 - analyzed.filter(i=>['Silikon','Tensid'].includes(i.cat)&&i.r!=='green').length*8);
+  const preisLeistung = 72;
+
+  // Suitable for
+  const suitableFor = [];
+  const notSuitableFor = [];
+  if(vertraeglichkeit>=80) suitableFor.push('Empfindliche Haut');
+  if(analyzed.find(i=>i.name.toLowerCase().includes('ceramide'))) suitableFor.push('Trockene Haut');
+  if(analyzed.find(i=>i.name.toLowerCase().includes('niacinamide'))) suitableFor.push('Mischhaut');
+  if(!analyzed.find(i=>i.r==='red')) suitableFor.push('Allgemein verträglich');
+  if(!analyzed.find(i=>i.cat==='Konservierung'&&i.r==='red')) suitableFor.push('Parabenfreie Formel');
+  if(state.profile.vegan && analyzed.find(i=>['gelatin','collagen','gelatin capsule'].some(g=>i.name.toLowerCase().includes(g)))) notSuitableFor.push('Enthält tierische Bestandteile');
+  if(state.profile.pregnant && analyzed.find(i=>i.r==='red'&&i.cat==='UV-Filter')) notSuitableFor.push('Vorsicht in Schwangerschaft (chem. UV-Filter)');
+  if(redN>0) notSuitableFor.push(`${redN} bedenkliche Inhaltsstoffe gefunden`);
+  if(suitableFor.length===0) suitableFor.push('Allgemeine Anwendung');
+
+  // Summary
+  const summary = buildSummary(product, overallScore, redN, yellowN, greenN, analyzed);
+
+  // Format ingredients
+  const ingredients = analyzed.map(i=>({name:i.name,rating:i.r,effect:i.e,concern:i.c,category:i.cat}));
+
+  // Alternatives
+  const alternatives = buildAlternatives(product, overallScore, analyzed);
+
+  return {overallScore,summary,scores:{wirksamkeit:Math.round(wirksamkeit),vertraeglichkeit:Math.round(vertraeglichkeit),nachhaltigkeit:Math.round(nachhaltigkeit),preisLeistung},suitableFor,notSuitableFor,ingredients,alternatives,source:'local'};
+}
+
+function buildSummary(product, score, redN, yellowN, greenN, analyzed) {
+  const total = analyzed.length;
+  const parts = [];
+  if(total===0) return `Für "${product.name}" konnten keine Inhaltsstoffe aus der Produktdatenbank abgerufen werden. Bitte INCI-Liste manuell einfügen oder API Key hinterlegen.`;
+  parts.push(`${total} Inhaltsstoffe analysiert: ${greenN} unbedenklich, ${yellowN} bedingt empfehlenswert, ${redN} bedenklich.`);
+  if(redN>0){const redNames=analyzed.filter(i=>i.r==='red').map(i=>i.name).slice(0,3).join(', ');parts.push(`Kritisch: ${redNames}.`);}
+  if(score>=80) parts.push('Insgesamt ein empfehlenswertes Produkt mit überwiegend sauberer Formel.');
+  else if(score>=60) parts.push('Durchschnittliche Formel – es gibt bessere Alternativen ohne bedenkliche Stoffe.');
+  else parts.push('Formel enthält mehrere bedenkliche Inhaltsstoffe – Wechsel zu einer saubereren Alternative empfohlen.');
+  return parts.join(' ');
+}
+
+function buildAlternatives(product, score, analyzed) {
+  const type = product.type||'Kosmetik';
+  const alts = [];
+  if(type==='Kosmetik') {
+    if(score<90) alts.push({name:'La Roche-Posay Toleriane Hydrating Gentle',score:87,reason:'Parabenfreie, minimale Formel für sensitive Haut',pros:['Ohne Parabene und Duftstoffe','Dermatologisch getestet','Ceramide + Niacinamide'],cons:['Teurer (~15€)','Weniger Textur-Optionen'],price:'~15€',where:'Apotheke, DM, Müller'});
+    if(score<85) alts.push({name:'Weleda Skin Food Original',score:82,reason:'Natürliche Inhaltsstoffe ohne synthetische Konservierung',pros:['99% natürliche Inhaltsstoffe','Ohne Parabene & Silikone','Nachhaltig'],cons:['Intensiver Kräutergeruch','Sehr reichhaltig'],price:'~9€',where:'DM, Rossmann, Apotheke'});
+    alts.push({name:'INCI Beauty Certified Clean',score:85,reason:'Clean Beauty Zertifizierung, alle bedenklichen Stoffe ausgeschlossen',pros:['Zertifiziert clean','Transparent über Inhaltsstoffe','Gut für Sensitive'],cons:['Kleinere Marke','Online bestellen nötig'],price:'~12€',where:'incidecoder.com, Notino'});
+  } else {
+    alts.push({name:'Garden of Life Vitamin Code',score:88,reason:'Vollspektrum aus Rohkost-Quellen, keine synthetischen Zusätze',pros:['Rohkost-Vitamine','Keine Füllstoffe','Probiotika inklusive'],cons:['Teurer','Größere Kapseln'],price:'~35€',where:'Reformhaus, Amazon, iherb.com'});
+    alts.push({name:'Thorne Research Basic Nutrients',score:85,reason:'Pharmazeutische Qualität, maximale Reinheit',pros:['Keine Füllstoffe','Pharma-Qualität','Gut verträglich'],cons:['Sehr teuer (~50€)','Nur online'],price:'~50€',where:'Amazon, iherb.com'});
+    alts.push({name:'Pure Encapsulations',score:83,reason:'Hypoallergen, keine Füllstoffe oder Farbstoffe',pros:['Hypoallergen','Keine unnötigen Zusätze','Gut erforscht'],cons:['Teuer','Geschmacksneutral'],price:'~40€',where:'Amazon, Apotheke'});
+  }
+  return alts.slice(0,3);
+}
+
+function toTitleCase(str){return str.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');}
+
+// ══════════════════════════════════════════════════════════════
+// CLAUDE API ANALYSIS
+// ══════════════════════════════════════════════════════════════
+async function analyzeWithClaude(product, ingredientsText) {
+  const profileCtx = state.profile.skins.length ? `Nutzerprofil: Hauttyp: ${state.profile.skins.join(', ')}. Unverträglichkeiten: ${state.profile.intolerances||'keine'}. Ziele: ${state.profile.goals||'keine'}. Vegan: ${state.profile.vegan}. Schwanger: ${state.profile.pregnant}.` : '';
+  const prompt = `Analysiere dieses ${product.type}-Produkt: "${product.name}" (Marke: ${product.brand||'unbekannt'}).
+Inhaltsstoffe: ${ingredientsText||'nicht verfügbar'}
+${profileCtx}
+Antworte NUR mit validem JSON ohne Backticks:
+{"overallScore":<0-100>,"summary":"<2-3 Sätze auf Deutsch>","scores":{"wirksamkeit":<0-100>,"vertraeglichkeit":<0-100>,"nachhaltigkeit":<0-100>,"preisLeistung":<0-100>},"suitableFor":["<string>"],"notSuitableFor":["<string>"],"ingredients":[{"name":"<string>","rating":"<green|yellow|red>","effect":"<Deutsch>","concern":"<Deutsch oder null>","category":"<string>"}],"alternatives":[{"name":"<string>","score":<0-100>,"reason":"<string>","pros":["<string>"],"cons":["<string>"],"price":"<string>","where":"<string>"}]}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':state.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2500,messages:[{role:'user',content:prompt}]})});
+  const data = await res.json();
+  if(data.content&&data.content[0]){const raw=data.content[0].text.trim().replace(/^```json?|```$/gm,'');return {...JSON.parse(raw),source:'claude'};}
+  throw new Error('No content');
+}
+
+// ══════════════════════════════════════════════════════════════
+// RUN ANALYSIS
+// ══════════════════════════════════════════════════════════════
+async function runAnalysis(product, ingredientsText) {
+  stopLoadingInterval();
+  state.currentProduct = product;
+  let analysis;
+  if(state.apiKey) {
+    try { analysis = await analyzeWithClaude(product, ingredientsText); }
+    catch(e) { console.error('Claude API error:', e); analysis = analyzeLocally(product, ingredientsText); }
+  } else {
+    analysis = analyzeLocally(product, ingredientsText);
+  }
+  state.currentAnalysis = analysis;
+  addRecent(product, analysis);
+  stopLoadingInterval();
+  renderResult(product, analysis);
+  showScreen('result');
+}
+
+function reloadRecent(barcode) {
+  if(!barcode||barcode.startsWith('manual')) { toast('Manuelle Einträge können nicht neu geladen werden.'); return; }
+  fetchAndAnalyze(barcode);
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER RESULT
+// ══════════════════════════════════════════════════════════════
+function sc(s){return s>=75?'#4CAF50':s>=50?'#FFB300':'#E53935';}
+const rLabel = {green:'Unbedenklich',yellow:'Bedingt',red:'Bedenklich'};
+const rCol = {green:'#81C784',yellow:'#FFD54F',red:'#EF9A9A'};
+
+function renderResult(product, analysis) {
+  state.activeIngFilter = 'all';
+  const scoreColor = sc(analysis.overallScore);
+  const circ = 2*Math.PI*40; const dash = (analysis.overallScore/100)*circ;
+  const gN=analysis.ingredients.filter(i=>i.rating==='green').length;
+  const yN=analysis.ingredients.filter(i=>i.rating==='yellow').length;
+  const rN=analysis.ingredients.filter(i=>i.rating==='red').length;
+  const sourceBadge = analysis.source==='claude' ?
+    '<span style="font-size:9px;background:rgba(201,168,76,0.15);border:0.5px solid rgba(201,168,76,0.35);border-radius:8px;padding:2px 8px;color:var(--gold)">✦ Claude KI</span>' :
+    '<span style="font-size:9px;background:rgba(76,175,80,0.1);border:0.5px solid rgba(76,175,80,0.3);border-radius:8px;padding:2px 8px;color:#81C784">⬡ Lokale DB</span>';
+
+  document.getElementById('result-content').innerHTML = `<div class="fade-in">
+    <div class="product-found" style="margin-top:4px">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        ${product.image?`<img src="${product.image}" style="width:60px;height:60px;object-fit:cover;border-radius:12px;flex-shrink:0" onerror="this.style.display='none'">`:''}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:9px;color:var(--gold);letter-spacing:0.12em">${product.type.toUpperCase()}</span>
+            ${sourceBadge}
+          </div>
+          <h2 style="font-family:var(--serif);font-size:17px;line-height:1.2;margin-bottom:2px">${product.name}</h2>
+          ${product.brand?`<div style="font-size:10px;color:var(--text3)">${product.brand}</div>`:''}
+        </div>
+        <div style="flex-shrink:0">
+          <svg width="72" height="72" viewBox="0 0 100 100" style="transform:rotate(-90deg)">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="${scoreColor}" stroke-width="10" stroke-dasharray="${dash} ${circ}" stroke-linecap="round" style="filter:drop-shadow(0 0 4px ${scoreColor})"/>
+          </svg>
+          <div style="margin-top:-50px;text-align:center;padding-bottom:22px">
+            <div style="font-family:var(--serif);font-size:20px;color:${scoreColor};line-height:1">${analysis.overallScore}</div>
+            <div style="font-size:8px;color:var(--text3)">/100</div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--text2);line-height:1.6;margin-top:10px">${analysis.summary}</p>
+    </div>
+
+    <div class="card">
+      <div class="label">DETAILBEWERTUNG</div>
+      ${Object.entries(analysis.scores).map(([k,v])=>`<div class="cat-bar">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--text3);letter-spacing:0.08em">${{wirksamkeit:'WIRKSAMKEIT',vertraeglichkeit:'VERTRÄGLICHKEIT',nachhaltigkeit:'NACHHALTIGKEIT',preisLeistung:'PREIS-LEISTUNG'}[k]}</span>
+          <span style="font-size:10px;color:${sc(v)}">${v}</span>
+        </div>
+        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${v}%;background:${sc(v)}"></div></div>
+      </div>`).join('')}
+    </div>
+
+    <div class="card">
+      <div class="label">GEEIGNET FÜR</div>
+      <div style="margin-bottom:${analysis.notSuitableFor&&analysis.notSuitableFor.length?'10px':'0'}">${(analysis.suitableFor||[]).map(s=>`<span class="tag tag-green">${s}</span>`).join('')}</div>
+      ${analysis.notSuitableFor&&analysis.notSuitableFor.length?`<div class="label" style="margin-top:4px">EINSCHRÄNKUNGEN</div><div>${analysis.notSuitableFor.map(s=>`<span class="tag tag-red">${s}</span>`).join('')}</div>`:''}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      ${[['#4CAF50',gN,'Clean'],['#FFB300',yN,'Bedingt'],['#E53935',rN,'Kritisch']].map(([c,n,l])=>`
+        <div style="background:${c}12;border:0.5px solid ${c}35;border-radius:14px;padding:12px 8px;text-align:center">
+          <div style="font-family:var(--serif);font-size:26px;color:${c};line-height:1">${n}</div>
+          <div style="font-size:8px;color:var(--text3);margin-top:2px">${l}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="tabs" id="ing-tabs">
+      ${[['all','Alle'],['green','✓ Clean'],['yellow','~ Bedingt'],['red','✗ Kritisch']].map(([v,l])=>`
+        <div class="tab ${v==='all'?'active':''}" onclick="filterIng('${v}')" id="tab-${v}">${l}</div>`).join('')}
+    </div>
+    <div id="ing-list">${renderIngredients(analysis.ingredients,'all')}</div>
+
+    <button onclick="renderAlternatives();showScreen('alternatives')" class="btn-gold" style="margin-top:8px">Bessere Alternativen anzeigen →</button>
+    <p style="font-size:9px;color:var(--text3);text-align:center;margin-top:16px;line-height:1.7">⚠ Keine medizinische Beratung. Ergebnisse dienen nur zur Information.</p>
+  </div>`;
+}
+
+function renderIngredients(ingredients, filter) {
+  const f = filter==='all'?ingredients:ingredients.filter(i=>i.rating===filter);
+  if(!f.length) return `<p style="font-size:11px;color:var(--text3);text-align:center;padding:20px">Keine Inhaltsstoffe in dieser Kategorie.</p>`;
+  return f.map(ing=>`<div class="ing-card ${ing.rating}" onclick="this.classList.toggle('open')">
+    <div style="display:flex;align-items:flex-start;gap:8px">
+      <div class="ing-dot dot-${ing.rating}" style="margin-top:4px"></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--text)">${ing.name}</span>
+          <span style="font-size:9px;color:${rCol[ing.rating]};letter-spacing:0.05em">${rLabel[ing.rating]}</span>
+        </div>
+        <div class="ing-detail">
+          <p style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:${ing.concern?'6px':'0'}"><span style="color:var(--text3)">Wirkung </span>${ing.effect}</p>
+          ${ing.concern?`<p style="font-size:11px;color:${rCol[ing.rating]};line-height:1.5"><span style="color:var(--text3)">Hinweis </span>${ing.concern}</p>`:''}
+          ${ing.category?`<span style="display:inline-block;margin-top:6px;padding:3px 8px;background:rgba(255,255,255,0.06);border-radius:10px;font-size:9px;color:var(--text3)">${ing.category}</span>`:''}
+        </div>
+      </div>
+    </div></div>`).join('');
+}
+
+function filterIng(val) {
+  state.activeIngFilter=val;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const tab=document.getElementById('tab-'+val);if(tab)tab.classList.add('active');
+  document.getElementById('ing-list').innerHTML=renderIngredients(state.currentAnalysis.ingredients,val);
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER ALTERNATIVES
+// ══════════════════════════════════════════════════════════════
+function renderAlternatives() {
+  const a=state.currentAnalysis; const p=state.currentProduct;
+  document.getElementById('alt-content').innerHTML=`<div class="fade-in">
+    <div class="label" style="margin-top:4px">BESSERE ALTERNATIVEN</div>
+    <h2 style="font-family:var(--serif);font-size:24px;line-height:1.2;margin-bottom:6px">Cleaner.<br>Wirksamer. Nachhaltiger.</h2>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:18px">Empfehlungen basierend auf deinem Scan</p>
+    <div style="background:rgba(229,57,53,0.06);border:0.5px solid rgba(229,57,53,0.2);border-radius:14px;padding:12px 14px;margin-bottom:18px">
+      <div style="font-size:8px;color:rgba(229,57,53,0.7);letter-spacing:0.12em;margin-bottom:4px">DEIN PRODUKT</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;color:var(--text2)">${p.name}</span>
+        <span style="font-family:var(--serif);font-size:22px;color:${sc(a.overallScore)}">${a.overallScore}</span>
+      </div>
+    </div>
+    ${(a.alternatives||[]).map((alt,i)=>`<div class="alt-card fade-in" style="animation-delay:${i*0.1}s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="flex:1"><div style="font-family:var(--serif);font-size:16px;margin-bottom:2px">${alt.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${alt.reason}</div></div>
+        <div style="text-align:center;flex-shrink:0;margin-left:12px">
+          <div style="font-family:var(--serif);font-size:22px;color:${sc(alt.score)}">${alt.score}</div>
+          <div style="font-size:8px;color:var(--text3)">SCORE</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div>${(alt.pros||[]).map(p=>`<p style="font-size:10px;color:#81C784;margin-bottom:2px">✓ ${p}</p>`).join('')}</div>
+        <div>${(alt.cons||[]).map(c=>`<p style="font-size:10px;color:var(--text3);margin-bottom:2px">– ${c}</p>`).join('')}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border)">
+        <span style="font-size:12px;color:var(--gold)">${alt.price||'–'}</span>
+        <span style="font-size:10px;color:var(--text3)">${alt.where||'–'}</span>
+      </div></div>`).join('')}
+    <p style="font-size:9px;color:var(--text3);text-align:center;margin-top:16px;line-height:1.7">Empfehlungen sind nicht gesponsert.<br>Rein algorithmusbasierte Auswahl.</p>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// INSTALL HINT
+// ══════════════════════════════════════════════════════════════
+setTimeout(()=>{
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone=window.navigator.standalone;
+  if(isIOS&&!isStandalone&&!localStorage.getItem('iq_hint')){
+    toast('💡 Tipp: Teilen → "Zum Home-Bildschirm" für App-Gefühl',5000);
+    localStorage.setItem('iq_hint','1');
+  }
+},4000);
+</script>
+</body>
+</html>
